@@ -13,6 +13,7 @@
     "lint": "npm run lint --workspace frontend",
     "test": "npm run test --workspace frontend -- --run",
     "db:migrate": ".\\backend\\.venv\\Scripts\\python.exe -m alembic -c backend/alembic.ini upgrade head",
+    "db:import:mospi": ".\\backend\\.venv\\Scripts\\python.exe backend/scripts/import_mospi_cpi.py",
     "backend:install": "python -m pip install -e \"./backend[dev]\""
   },
   "devDependencies": {

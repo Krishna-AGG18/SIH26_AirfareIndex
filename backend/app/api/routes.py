@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +12,16 @@ from app.schemas import (
     AirfareSearchRequest,
     AirfareSearchResponse,
     IndexSeriesResponse,
+    MapeResponse,
 )
-from app.services.index import build_index_series
+from app.services.index import (
+    DEFAULT_SYNTHETIC_DATASET,
+    DEFAULT_SYNTHETIC_SECTOR,
+    DEFAULT_SYNTHETIC_STATE,
+    build_live_index_series,
+    build_mape_comparison,
+    build_synthetic_index_series,
+)
 from app.services.serpapi import SerpApiClient, SerpApiConfigurationError, SerpApiError
 
 router = APIRouter()
@@ -68,13 +77,57 @@ async def search_airfares(
 async def get_index_series(
     origin: str = Query(default="DEL", min_length=3, max_length=8),
     destination: str = Query(default="BOM", min_length=3, max_length=8),
+    data_source: Literal["auto", "live", "synthetic"] = Query(default="auto", alias="source"),
+    state: str = Query(default=DEFAULT_SYNTHETIC_STATE, min_length=2, max_length=120),
+    sector: Literal["Rural", "Urban", "Combined"] = Query(default=DEFAULT_SYNTHETIC_SECTOR),
     session: AsyncSession | None = Depends(get_session),
 ) -> IndexSeriesResponse:
     if session is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="DATABASE_URL is not configured")
 
-    points: list[AirfareIndexPoint] = await build_index_series(session, origin, destination)
+    live_points: list[AirfareIndexPoint] = []
+    if data_source in {"auto", "live"}:
+        live_points = await build_live_index_series(session, origin, destination)
+    if live_points or data_source == "live":
+        return IndexSeriesResponse(
+            route={"origin": origin.upper(), "destination": destination.upper()},
+            source="live",
+            source_label="Live fare observations",
+            points=live_points,
+        )
+
+    synthetic_points = await build_synthetic_index_series(
+        session,
+        dataset_key=DEFAULT_SYNTHETIC_DATASET,
+        state=state,
+        sector=sector,
+    )
+    if not synthetic_points:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No live or synthetic index observations found")
     return IndexSeriesResponse(
         route={"origin": origin.upper(), "destination": destination.upper()},
+        source="synthetic",
+        source_label=f"MoSPI CPI Airfare Index · {state} / {sector}",
+        fallback_used=data_source == "auto",
+        points=synthetic_points,
+    )
+
+
+@router.get("/index/mape", response_model=MapeResponse)
+async def get_mape(
+    origin: str = Query(default="DEL", min_length=3, max_length=8),
+    destination: str = Query(default="BOM", min_length=3, max_length=8),
+    session: AsyncSession | None = Depends(get_session),
+) -> MapeResponse:
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="DATABASE_URL is not configured")
+
+    points = await build_mape_comparison(session, origin, destination)
+    mape = round(sum(point.absolute_percentage_error for point in points) / len(points), 2) if points else None
+    return MapeResponse(
+        route={"origin": origin.upper(), "destination": destination.upper()},
+        benchmark="MoSPI CPI Airfare Index · All India / Combined",
+        points_compared=len(points),
+        mape_percent=mape,
         points=points,
     )

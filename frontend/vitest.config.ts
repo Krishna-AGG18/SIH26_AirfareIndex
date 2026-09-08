@@ -1,10 +1,14 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
+  root: frontendRoot,
   resolve: {
     alias: {
-      "@": path.resolve(process.cwd(), "src"),
+      "@": path.resolve(frontendRoot, "src"),
     },
   },
   test: {

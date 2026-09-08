@@ -18,7 +18,10 @@ export function IndexChart({ points }: IndexChartProps) {
       textStyle: { color: "#f0f3eb" },
       formatter: (items: Array<{ dataIndex: number }>) => {
         const point = points[items[0]?.dataIndex ?? 0];
-        return `${point.date}<br/><strong>${point.index.toFixed(1)}</strong> index · ₹${point.averageFareInr.toLocaleString("en-IN")}`;
+        const fare = point.averageFareInr === null
+          ? "CPI benchmark"
+          : `₹${point.averageFareInr.toLocaleString("en-IN")}`;
+        return `${point.date}<br/><strong>${point.index.toFixed(1)}</strong> index · ${fare}`;
       },
     },
     xAxis: {

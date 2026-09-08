@@ -102,6 +102,14 @@ Apply the initial database schema after `DATABASE_URL_UNPOOLED` is available:
 npm run db:migrate
 ```
 
+Import the MoSPI airfare index workbook into the synthetic fallback table. The importer validates the airfare series, stores the workbook checksum and provenance, and performs an idempotent upsert:
+
+```powershell
+npm run db:import:mospi -- "C:\Users\User\Downloads\cpi_2009.xlsx"
+```
+
+The supplied workbook contributes 1,786 observations across 19 monthly periods from January 2025 through July 2026, including every available state/sector combination. The default fallback is `All India` / `Combined`; the original Urban, Rural, and Combined series remain available for benchmark visualizations.
+
 Run frontend checks:
 
 ```powershell
@@ -114,6 +122,8 @@ npm run build
 
 `POST /api/v1/airfares/search` calls SerpApi's `google_flights` engine, normalizes returned itineraries, and persists observations when Neon is configured.
 
-`GET /api/v1/index/series` reads stored observations and returns a rebased index where the first observed daily average is `100.0`.
+`GET /api/v1/index/series` reads live observations and returns a rebased index where the first observed daily average is `100.0`. With the default `source=auto`, it falls back to the imported MoSPI synthetic series when live data is unavailable. Use `source=synthetic&state=...&sector=...` to request a specific benchmark series.
+
+`GET /api/v1/index/mape` aligns monthly live fare observations with the MoSPI `All India` / `Combined` benchmark and returns point-by-point absolute percentage errors plus aggregate MAPE. It returns no comparison points until live observations overlap the benchmark period.
 
 The backend deliberately does not include scraping yet. The future collector boundary belongs under `backend/app/services/collectors/`, with a common normalized observation shape shared by the SerpApi and Scrapy/Playwright implementations.
