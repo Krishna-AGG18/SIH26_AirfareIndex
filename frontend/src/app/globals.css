@@ -62,17 +62,35 @@ html, body {
   box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
 }
 
-.header-title-block {
-  display: flex;
-  flex-direction: column;
-}
-
 .gov-title {
   margin: 0;
   font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #f8fafc;
+}
+
+.gov-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.base-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0284c7;
+  color: #ffffff;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #f8fafc;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
 }
 
 /* Main Dashboard Canvas */

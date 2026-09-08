@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Database, Layers, RefreshCw, Share2, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Database, Layers, RefreshCw, Sparkles } from "lucide-react";
 import { fetchCPIDashboard, triggerSeedData } from "@/lib/api";
-import type { CPIDashboardResponse, ScheduleOption, SectorOption } from "@/types/airfare";
+import type { CPIChartPoint, CPIDashboardResponse, ScheduleOption, SectorOption } from "@/types/airfare";
 import { CPIBarChart } from "@/components/cpi-bar-chart";
 import { StateHorizontalBarChart } from "@/components/state-horizontal-bar-chart";
 import { InflationDualBarChart } from "@/components/inflation-dual-bar-chart";
@@ -11,70 +11,115 @@ import { CPIInflationCombinedChart } from "@/components/cpi-inflation-combined-c
 import { InflationAreaLineChart } from "@/components/inflation-area-line-chart";
 
 export function AirfareIndexDashboard() {
+  // Global dashboard controls
   const [schedule, setSchedule] = useState<ScheduleOption>("next_month");
-  const [baseYear, setBaseYear] = useState<string>("2024");
-  const [selectedState, setSelectedState] = useState<string>("Arunachal Pradesh");
-  const [selectedSector, setSelectedSector] = useState<SectorOption>("rural");
+  const baseYear = "2024";
   const [selectedYear, setSelectedYear] = useState<string>("2026");
 
+  // Isolated Card 4 (State Wise CPI) controls & state
+  const [selectedState, setSelectedState] = useState<string>("Arunachal Pradesh");
+  const [selectedStateSector, setSelectedStateSector] = useState<SectorOption>("rural");
+  const [stateSeriesData, setStateSeriesData] = useState<CPIChartPoint[] | null>(null);
+  const [isStateLoading, setIsStateLoading] = useState<boolean>(false);
+
+  // Isolated Card 5 (Inflation Dual Bar) sector toggle
+  const [dualBarSector, setDualBarSector] = useState<SectorOption>("rural");
+
+  // Isolated Card 7 (YoY Inflation) sector toggle
+  const [yoySector, setYoySector] = useState<SectorOption>("urban");
+
+  // Global data & loading states
   const [dashboardData, setDashboardData] = useState<CPIDashboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
 
-  const loadData = useCallback(async (showLoading = true) => {
+  const stateRef = useRef({ state: selectedState, sector: selectedStateSector });
+  stateRef.current = { state: selectedState, sector: selectedStateSector };
+
+  const loadGlobalDashboard = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     setIsRefreshing(true);
+    setErrorMessage(null);
     try {
       const data = await fetchCPIDashboard({
         schedule,
         baseYear,
         year: selectedYear,
-        state: selectedState,
-        sector: selectedSector,
+        state: stateRef.current.state,
+        sector: stateRef.current.sector,
       });
       setDashboardData(data);
+      setStateSeriesData(data.state_series);
+      if (data.available_states?.length > 0 && !data.available_states.includes(stateRef.current.state)) {
+        setSelectedState(data.available_states[0]);
+      }
     } catch (err) {
-      console.error("Failed to load CPI dashboard data from   DB:", err);
+      console.error("Failed to load CPI dashboard data from DB:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to load database records");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [schedule, baseYear, selectedYear, selectedState, selectedSector]);
+  }, [schedule, baseYear, selectedYear]);
 
   useEffect(() => {
-    void loadData(true);
-  }, [loadData]);
+    void loadGlobalDashboard(true);
+  }, [loadGlobalDashboard]);
+
+  // Card 4 only state change handler
+  const handleStateFilterChange = async (newState: string, newSector: SectorOption) => {
+    setSelectedState(newState);
+    setSelectedStateSector(newSector);
+    setIsStateLoading(true);
+    try {
+      const data = await fetchCPIDashboard({
+        schedule,
+        baseYear,
+        year: selectedYear,
+        state: newState,
+        sector: newSector,
+      });
+      setStateSeriesData(data.state_series);
+    } catch (err) {
+      console.error("Failed to update state series:", err);
+    } finally {
+      setIsStateLoading(false);
+    }
+  };
 
   async function handleSeed() {
     setIsRefreshing(true);
+    setErrorMessage(null);
     try {
       const res = await triggerSeedData();
       setSeedMessage(res.message);
-      await loadData(false);
+      await loadGlobalDashboard(false);
       setTimeout(() => setSeedMessage(null), 4000);
     } catch (err) {
       console.error("Seed error:", err);
+      setErrorMessage(err instanceof Error ? err.message : "Failed to re-seed database");
     } finally {
       setIsRefreshing(false);
     }
   }
 
-  const availableStates = dashboardData?.available_states ?? [
-    "Arunachal Pradesh",
-    "Assam",
-    "Bihar",
-    "Delhi",
-    "Gujarat",
-    "Karnataka",
-    "Kerala",
-    "Maharashtra",
-    "Punjab",
-    "Rajasthan",
-    "Tamil Nadu",
-    "Uttar Pradesh",
-    "West Bengal",
-  ];
+  const availableStates = dashboardData?.available_states ?? [];
+
+  // Sector-specific inflation comparison data for Card 5
+  const dualBarPoints =
+    dashboardData?.inflation_comparison_by_sector?.[dualBarSector] ??
+    dashboardData?.inflation_comparison_series ??
+    [];
+
+  // Sector-specific YoY inflation data for Card 7
+  const yoyPoints =
+    dashboardData?.yoy_series_by_sector?.[yoySector] ??
+    dashboardData?.yoy_inflation_series ??
+    [];
+
+  const currentStateSeries = stateSeriesData ?? dashboardData?.state_series ?? [];
 
   return (
     <div className="mospi-container">
@@ -85,7 +130,8 @@ export function AirfareIndexDashboard() {
             <span className="emblem-text">PRICEX</span>
           </div>
           <div className="header-title-block">
-            <h1 className="gov-title">AIRFARE PRICEX - INDIA&apos;S DIGITAL AIRFARE INFLATION MONITOR</h1>
+            <h1 className="gov-title">AIRFARE PRICEX</h1>
+            <p className="gov-subtitle">INDIA&apos;S DIGITAL AIRFARE INFLATION MONITOR</p>
           </div>
         </div>
       </header>
@@ -106,20 +152,9 @@ export function AirfareIndexDashboard() {
             <div className="cpi-title-section">
               <h2>Consumer Price Index (CPI)</h2>
               <div className="base-year-group">
-                <button
-                  type="button"
-                  className={`base-btn ${baseYear === "2024" ? "active" : ""}`}
-                  onClick={() => setBaseYear("2024")}
-                >
+                <span className="base-badge">
                   Base Year 2024
-                </button>
-                <button
-                  type="button"
-                  className={`base-btn ${baseYear === "2012" ? "active" : ""}`}
-                  onClick={() => setBaseYear("2012")}
-                >
-                  Base Year 2012
-                </button>
+                </span>
               </div>
             </div>
 
@@ -139,7 +174,6 @@ export function AirfareIndexDashboard() {
                 >
                   <option value="2026">2026</option>
                   <option value="2025">2025</option>
-                  <option value="2024">2024</option>
                 </select>
               </div>
 
@@ -159,12 +193,12 @@ export function AirfareIndexDashboard() {
                 </select>
               </div>
 
-              {/* Refresh /   Status */}
+              {/* Refresh / Status */}
               <button
                 type="button"
                 className="icon-action-btn"
-                onClick={() => void loadData(true)}
-                title="Refresh Live   Data"
+                onClick={() => void loadGlobalDashboard(true)}
+                title="Refresh Live Data"
               >
                 <RefreshCw size={15} className={isRefreshing ? "spin" : ""} />
               </button>
@@ -178,6 +212,20 @@ export function AirfareIndexDashboard() {
             </div>
           )}
 
+          {/* Error Notification Toast */}
+          {errorMessage && (
+            <div className="toast-notification" style={{ borderColor: "#ef4444", color: "#fca5a5", background: "rgba(239, 68, 68, 0.15)" }}>
+              <span>⚠️ {errorMessage}</span>
+              <button
+                type="button"
+                onClick={() => void loadGlobalDashboard(true)}
+                style={{ marginLeft: 12, background: "#ef4444", color: "#fff", border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Grid Layout (CPI Cards & Inflation Rate Cards) */}
           <div className="dashboard-grid">
             {/* 1. Rural Visualisation Panel */}
@@ -188,7 +236,7 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
                   <CPIBarChart points={dashboardData.rural_series} color="#38bdf8" height={210} />
                 )}
@@ -203,7 +251,7 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
                   <CPIBarChart points={dashboardData.urban_series} color="#60a5fa" height={210} />
                 )}
@@ -218,7 +266,7 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
                   <CPIBarChart points={dashboardData.combined_series} color="#94a3b8" height={210} />
                 )}
@@ -236,7 +284,7 @@ export function AirfareIndexDashboard() {
                     <select
                       id="state-select"
                       value={selectedState}
-                      onChange={(e) => setSelectedState(e.target.value)}
+                      onChange={(e) => void handleStateFilterChange(e.target.value, selectedStateSector)}
                       className="mospi-select mini-select"
                     >
                       {availableStates.map((st) => (
@@ -252,8 +300,8 @@ export function AirfareIndexDashboard() {
                     <label htmlFor="sector-select">Select the Sector</label>
                     <select
                       id="sector-select"
-                      value={selectedSector}
-                      onChange={(e) => setSelectedSector(e.target.value as SectorOption)}
+                      value={selectedStateSector}
+                      onChange={(e) => void handleStateFilterChange(selectedState, e.target.value as SectorOption)}
                       className="mospi-select mini-select"
                     >
                       <option value="rural">Rural</option>
@@ -265,10 +313,10 @@ export function AirfareIndexDashboard() {
               </div>
 
               <div className="card-body">
-                {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                {isLoading || isStateLoading || !dashboardData ? (
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
-                  <StateHorizontalBarChart points={dashboardData.state_series} color="#c4a57b" height={360} />
+                  <StateHorizontalBarChart points={currentStateSeries} color="#c4a57b" height={360} />
                 )}
               </div>
             </div>
@@ -280,22 +328,22 @@ export function AirfareIndexDashboard() {
                 <div className="sector-toggle-buttons">
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "rural" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("rural")}
+                    className={`sector-btn ${dualBarSector === "rural" ? "active" : ""}`}
+                    onClick={() => setDualBarSector("rural")}
                   >
                     Rural
                   </button>
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "urban" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("urban")}
+                    className={`sector-btn ${dualBarSector === "urban" ? "active" : ""}`}
+                    onClick={() => setDualBarSector("urban")}
                   >
                     Urban
                   </button>
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "combined" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("combined")}
+                    className={`sector-btn ${dualBarSector === "combined" ? "active" : ""}`}
+                    onClick={() => setDualBarSector("combined")}
                   >
                     Combined
                   </button>
@@ -303,9 +351,9 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
-                  <InflationDualBarChart points={dashboardData.inflation_comparison_series ?? []} height={250} />
+                  <InflationDualBarChart points={dualBarPoints} height={250} />
                 )}
               </div>
             </div>
@@ -318,7 +366,7 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
                   <CPIInflationCombinedChart points={dashboardData.cpi_inflation_combined_series ?? []} height={250} />
                 )}
@@ -332,22 +380,22 @@ export function AirfareIndexDashboard() {
                 <div className="sector-toggle-buttons">
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "rural" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("rural")}
+                    className={`sector-btn ${yoySector === "rural" ? "active" : ""}`}
+                    onClick={() => setYoySector("rural")}
                   >
                     Rural
                   </button>
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "urban" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("urban")}
+                    className={`sector-btn ${yoySector === "urban" ? "active" : ""}`}
+                    onClick={() => setYoySector("urban")}
                   >
                     Urban
                   </button>
                   <button
                     type="button"
-                    className={`sector-btn ${selectedSector === "combined" ? "active" : ""}`}
-                    onClick={() => setSelectedSector("combined")}
+                    className={`sector-btn ${yoySector === "combined" ? "active" : ""}`}
+                    onClick={() => setYoySector("combined")}
                   >
                     Combined
                   </button>
@@ -355,40 +403,29 @@ export function AirfareIndexDashboard() {
               </div>
               <div className="card-body">
                 {isLoading || !dashboardData ? (
-                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading   DB Data...</div>
+                  <div className="chart-skeleton"><RefreshCw className="spin" size={24} /> Loading DB Data...</div>
                 ) : (
-                  <InflationAreaLineChart points={dashboardData.yoy_inflation_series ?? []} height={250} />
+                  <InflationAreaLineChart points={yoyPoints} height={250} />
                 )}
               </div>
             </div>
           </div>
 
-          {/* Power BI Style Footer */}
-          <footer className="powerbi-footer">
-            <div className="footer-left">
-              <span className="powerbi-logo">Microsoft Power BI</span>
-            </div>
-
+          {/* Footer Bar */}
+          <footer className="powerbi-footer" style={{ justifyContent: "center" }}>
             <div className="footer-center">
               <span className="page-nav">&lt; 3 of 3 &gt;</span>
               <button
                 type="button"
                 className="seed-db-btn"
                 onClick={() => void handleSeed()}
-                title="Seed Live   Database Records"
+                title="Seed Database Records"
               >
-                <Database size={13} /> Re-seed   DB
+                <Database size={13} /> Re-seed DB
               </button>
               <span className="live-db-pill">
-                <span className="dot-green" />   DB Live ({dashboardData?.total_observations ?? 0} obs)
+                <span className="dot-green" /> DB Live ({dashboardData?.total_observations ?? 0} obs)
               </span>
-            </div>
-
-            <div className="footer-right">
-              <span className="more-vis">More Visualizations →</span>
-              <div className="social-icons">
-                <Share2 size={13} />
-              </div>
             </div>
           </footer>
         </div>

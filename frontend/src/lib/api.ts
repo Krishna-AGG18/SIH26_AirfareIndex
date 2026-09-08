@@ -1,6 +1,6 @@
 import type { CPIDashboardResponse, IndexSeriesResponse, ScheduleOption, SectorOption } from "@/types/airfare";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 export async function fetchIndexSeries(signal?: AbortSignal): Promise<IndexSeriesResponse> {
   const response = await fetch(`${apiBaseUrl}/api/v1/index/series`, {

@@ -99,4 +99,14 @@ export type CPIDashboardResponse = {
   inflation_comparison_series?: InflationComparisonPoint[];
   cpi_inflation_combined_series?: CPIInflationCombinedPoint[];
   yoy_inflation_series?: YoYInflationPoint[];
+  yoy_series_by_sector?: {
+    rural: YoYInflationPoint[];
+    urban: YoYInflationPoint[];
+    combined: YoYInflationPoint[];
+  };
+  inflation_comparison_by_sector?: {
+    rural: InflationComparisonPoint[];
+    urban: InflationComparisonPoint[];
+    combined: InflationComparisonPoint[];
+  };
 };
