@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Float,
@@ -34,6 +35,8 @@ class FareObservation(Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stops: Mapped[int] = mapped_column(Integer, default=0)
     source: Mapped[str] = mapped_column(String(24), default="live", index=True)
+    state: Mapped[str] = mapped_column(String(64), default="All India", index=True)
+    sector: Mapped[str] = mapped_column(String(16), default="urban", index=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     raw_payload: Mapped[dict] = mapped_column(JSONB, default=dict)
 
@@ -69,5 +72,5 @@ class AirfareIndexObservation(Base):
     code: Mapped[str] = mapped_column(String(40), index=True)
     index_value: Mapped[float] = mapped_column(Numeric(12, 2))
     inflation_yoy: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
-    imputation: Mapped[bool] = mapped_column(default=False)
+    imputation: Mapped[bool] = mapped_column(Boolean, default=False)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

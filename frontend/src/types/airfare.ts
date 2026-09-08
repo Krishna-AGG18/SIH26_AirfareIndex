@@ -1,4 +1,6 @@
 export type ObservationSource = "live" | "synthetic";
+export type ScheduleOption = "today" | "next_week" | "next_month" | "next_45_days";
+export type SectorOption = "rural" | "urban" | "combined";
 
 export type AirfareIndexPoint = {
   date: string;
@@ -43,4 +45,58 @@ export type MapeResponse = {
   pointsCompared: number;
   mapePercent: number | null;
   points: MapeComparisonPoint[];
+};
+
+export type CPIChartPoint = {
+  label: string;
+  date: string;
+  index: number;
+  average_fare_inr: number;
+  observations: number;
+  inflation_yoy?: number;
+  inflation_mom?: number;
+};
+
+export type StateSummary = {
+  state: string;
+  sector: string;
+  cpi_index: number;
+  average_fare_inr: number;
+  observations: number;
+};
+
+export type InflationComparisonPoint = {
+  month: string;
+  airfare_inflation: number;
+  general_inflation: number;
+};
+
+export type CPIInflationCombinedPoint = {
+  month: string;
+  cpi_index: number;
+  inflation_rate: number;
+};
+
+export type YoYInflationPoint = {
+  month: string;
+  inflation_rate: number;
+};
+
+export type CPIDashboardResponse = {
+  schedule: ScheduleOption;
+  base_year: string;
+  year?: number;
+  selected_state: string;
+  selected_sector: SectorOption;
+  rural_series: CPIChartPoint[];
+  urban_series: CPIChartPoint[];
+  combined_series: CPIChartPoint[];
+  state_series: CPIChartPoint[];
+  states_summary: StateSummary[];
+  available_states: string[];
+  total_observations: number;
+  is_live_db: boolean;
+  inflation_comparison_series?: InflationComparisonPoint[];
+  cpi_inflation_combined_series?: CPIInflationCombinedPoint[];
+  yoy_inflation_series?: YoYInflationPoint[];
 };

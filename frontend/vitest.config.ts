@@ -6,12 +6,16 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: frontendRoot,
+  esbuild: {
+    jsx: "automatic",
+  },
   resolve: {
     alias: {
       "@": path.resolve(frontendRoot, "src"),
     },
   },
   test: {
+    globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],

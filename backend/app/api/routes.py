@@ -11,9 +11,13 @@ from app.schemas import (
     AirfareIndexPoint,
     AirfareSearchRequest,
     AirfareSearchResponse,
+    CPIDashboardResponse,
     IndexSeriesResponse,
     MapeResponse,
+    ScheduleOption,
+    SectorOption,
 )
+from app.services.cpi import build_cpi_dashboard, seed_neon_cpi_data
 from app.services.index import (
     DEFAULT_SYNTHETIC_DATASET,
     DEFAULT_SYNTHETIC_SECTOR,
@@ -56,6 +60,8 @@ async def search_airfares(
                     duration_minutes=offer.duration_minutes,
                     stops=offer.stops,
                     source=offer.source,
+                    state=offer.state,
+                    sector=offer.sector,
                     captured_at=collected_at,
                     raw_payload=offer.model_dump(mode="json"),
                 )
@@ -131,3 +137,36 @@ async def get_mape(
         mape_percent=mape,
         points=points,
     )
+
+
+@router.get("/dashboard/cpi", response_model=CPIDashboardResponse)
+async def get_cpi_dashboard(
+    schedule: ScheduleOption = Query(default="next_month"),
+    base_year: str = Query(default="2024"),
+    year: int = Query(default=2026),
+    state: str = Query(default="Arunachal Pradesh"),
+    sector: SectorOption = Query(default="rural"),
+    session: AsyncSession | None = Depends(get_session),
+) -> CPIDashboardResponse:
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="DATABASE_URL is not configured")
+
+    return await build_cpi_dashboard(
+        session=session,
+        schedule=schedule,
+        base_year=base_year,
+        year=year,
+        selected_state=state,
+        selected_sector=sector,
+    )
+
+
+@router.post("/seed")
+async def seed_data(
+    session: AsyncSession | None = Depends(get_session),
+) -> dict[str, int | str]:
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="DATABASE_URL is not configured")
+
+    count = await seed_neon_cpi_data(session)
+    return {"message": f"Successfully seeded {count} observation records into Neon DB", "count": count}
